@@ -30,6 +30,10 @@ const configSchema = z.object({
   screenshotOnSuccess: z.preprocess(parseBool, z.boolean()).default(true),
   maxRetries: z.coerce.number().int().min(0).default(3),
   retryBaseDelayMs: z.coerce.number().int().positive().default(1000),
+  llmApiKey: z.string().min(1, "OPENROUTER_API_KEY is required"),
+  llmModel: z.string().default("openai/gpt-oss-120b:free"),
+  maxAgentSteps: z.coerce.number().int().min(1).default(25),
+  llmTemperature: z.coerce.number().min(0).max(2).default(0.7),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -59,6 +63,10 @@ export function getConfig(): Config {
     screenshotOnSuccess: process.env.SCREENSHOT_ON_SUCCESS,
     maxRetries: process.env.MAX_RETRIES,
     retryBaseDelayMs: process.env.RETRY_BASE_DELAY_MS,
+    llmApiKey: process.env.OPENROUTER_API_KEY,
+    llmModel: process.env.OPENROUTER_MODEL,
+    maxAgentSteps: process.env.MAX_AGENT_STEPS,
+    llmTemperature: process.env.LLM_TEMPERATURE,
   };
 
   const result = configSchema.safeParse(envConfig);

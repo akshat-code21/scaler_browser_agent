@@ -66,8 +66,18 @@ export class ClickTool extends BaseTool {
         await locator.click({ force: params.force, timeout });
       }
 
+      const inputTag = await locator?.evaluate((el) => {
+        const tag = el.tagName.toLowerCase();
+        if (tag === "input" || tag === "textarea" || el.getAttribute("contenteditable")) {
+          return tag;
+        }
+        return null;
+      }).catch(() => null);
+
+      const hint = inputTag ? `You clicked on a ${inputTag} field. Now use the send_keys tool to type text into it.` : undefined;
+
       logger.info(`Click successful`, { strategy, durationMs: Date.now() - startTime });
-      return this.success({ strategy });
+      return this.success({ strategy, hint });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`Click failed`, { strategy, error: message });

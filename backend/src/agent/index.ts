@@ -7,3 +7,4 @@ export { SendKeysTool } from "./tools/SendKeysTool.js";
 export { ScrollTool } from "./tools/ScrollTool.js";
 export { DoubleClickTool } from "./tools/DoubleClickTool.js";
 export { ScreenshotTool } from "./tools/ScreenshotTool.js";
+export { AIAgent } from "./AIAgent.js";
