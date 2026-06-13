@@ -41,7 +41,7 @@ export class LLMClient {
 
   constructor(config: LLMConfig) {
     this.client = new OpenAI({
-      baseURL: "https://openrouter.ai/api/v1",
+      // baseURL: "https://openrouter.ai/api/v1",
       apiKey: config.apiKey,
       defaultQuery: { model: config.model },
     });
@@ -109,10 +109,10 @@ export class LLMClient {
         finishReason,
         usage: response.usage
           ? {
-              promptTokens: response.usage.prompt_tokens,
-              completionTokens: response.usage.completion_tokens,
-              totalTokens: response.usage.total_tokens,
-            }
+            promptTokens: response.usage.prompt_tokens,
+            completionTokens: response.usage.completion_tokens,
+            totalTokens: response.usage.total_tokens,
+          }
           : null,
       };
     } catch (error: any) {
