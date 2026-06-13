@@ -1,3 +1,8 @@
+/**
+ * Multi-strategy element detector for finding form fields on a page.
+ * Strategies are tried in priority order: testId -> label -> placeholder -> role -> CSS -> nearby text.
+ * If all strategies fail, last-resort ID-based selectors are used.
+ */
 import { Page, Locator } from "playwright";
 import { logger } from "./logger.js";
 
@@ -63,6 +68,7 @@ export class ElementDetector {
     },
   ];
 
+  /** Tries each strategy in order, returns the first visible element found. */
   async findElement(page: Page, criteria: FindCriteria, timeout = 10000): Promise<Locator | null> {
     for (const strategy of this.strategies) {
       try {
@@ -84,6 +90,10 @@ export class ElementDetector {
     return null;
   }
 
+  /**
+   * Attempts to find the title (Bug Title) and description fields in the shadcn demo form.
+   * Falls back to direct ID-based selectors (#form-rhf-demo-title, #form-rhf-demo-description).
+   */
   async findFormFields(page: Page): Promise<{ titleField?: Locator; descriptionField?: Locator }> {
     const titleField = await this.findElement(page, {
       label: "Bug Title",
@@ -106,6 +116,7 @@ export class ElementDetector {
     return { titleField: titleField ?? undefined, descriptionField };
   }
 
+  /** Finds the description textarea using strategies and ID fallback. */
   private async findDescription(page: Page): Promise<Locator | undefined> {
     const field = await this.findElement(page, {
       label: "Description",

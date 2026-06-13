@@ -1,3 +1,7 @@
+/**
+ * Agent orchestrator that composes modular tools to perform the automation task.
+ * Workflow: open browser -> navigate -> detect form fields -> fill them -> screenshot -> cleanup.
+ */
 import { toolRegistry } from "./tools/Tool.js";
 import { ElementDetector } from "../utils/element-detector.js";
 import { getConfig } from "../utils/config.js";
@@ -22,6 +26,7 @@ export class Agent {
     this.detector = new ElementDetector();
   }
 
+  /** Main entry point: runs the full automation workflow. */
   async run(): Promise<AgentResult> {
     this.startTime = Date.now();
     const config = getConfig();
@@ -67,6 +72,7 @@ export class Agent {
     }
   }
 
+  /** Launches a browser instance via the OpenBrowserTool. */
   private async openBrowser(): Promise<void> {
     const openBrowserTool = toolRegistry.get("open_browser");
     if (!openBrowserTool) throw new Error("open_browser tool not registered");
@@ -79,6 +85,7 @@ export class Agent {
     this.context = data.context;
   }
 
+  /** Creates a new page (tab) and propagates it as shared context to all tools. */
   private async createPage(): Promise<Page> {
     if (!this.context) throw new Error("Browser context not initialized");
     const page = await this.context.newPage();
@@ -87,6 +94,7 @@ export class Agent {
     return page;
   }
 
+  /** Navigates the current page to the target URL. */
   private async navigate(url: string): Promise<void> {
     const navigateTool = toolRegistry.get("navigate_to_url");
     if (!navigateTool) throw new Error("navigate_to_url tool not registered");
@@ -95,6 +103,10 @@ export class Agent {
     if (!result.success) throw new Error(`Navigation failed: ${result.error}`);
   }
 
+  /**
+   * Attempts to scroll the form into view using multiple selector strategies.
+   * Falls back to a pixel-based scroll if no selector matches.
+   */
   private async scrollToForm(): Promise<void> {
     const scrollTool = toolRegistry.get("scroll");
     if (!scrollTool) {
@@ -103,15 +115,13 @@ export class Agent {
     }
 
     const cardSelectors = [
-      "section:has(#form-rhf-demo)",
-      "article:has(#form-rhf-demo)",
       "#form-rhf-demo",
       "text=Bug Report",
       "text=Bug Title",
     ];
 
     for (const selector of cardSelectors) {
-      const result = await scrollTool.execute({ selector, behavior: "instant" }).catch(() => null);
+      const result = await scrollTool.execute({ selector, behavior: "instant", timeout: 3000 }).catch(() => null);
       if (result?.success) {
         logger.info("Scrolled to form", { selector });
         return;
@@ -122,6 +132,10 @@ export class Agent {
     await scrollTool.execute({ direction: "down", pixels: 400 });
   }
 
+  /**
+   * Detects the title and description fields using the ElementDetector
+   * and fills them with configured values.
+   */
   private async fillFormFields(config: ReturnType<typeof getConfig>): Promise<boolean> {
     if (!this.page) return false;
 
@@ -160,6 +174,10 @@ export class Agent {
     return filledCount > 0;
   }
 
+  /**
+   * Fallback strategy that tries multiple selector types (placeholder, role, label, name)
+   * to find and fill each form field when the primary detection fails.
+   */
   private async fillFormFallback(config: ReturnType<typeof getConfig>): Promise<boolean> {
     if (!this.page) return false;
     let filled = false;
@@ -207,6 +225,7 @@ export class Agent {
     return filled;
   }
 
+  /** Captures a full-page screenshot. Returns the file path or null on failure. */
   private async takeScreenshot(name: string): Promise<string | null> {
     const screenshotTool = toolRegistry.get("take_screenshot");
     if (!screenshotTool) {
@@ -224,6 +243,7 @@ export class Agent {
     return data.path;
   }
 
+  /** Builds a failure result with error message and duration. */
   private failure(error: string, screenshotPaths: string[]): AgentResult {
     return {
       success: false,
@@ -233,6 +253,7 @@ export class Agent {
     };
   }
 
+  /** Closes the browser if it's still open, ensuring clean teardown. */
   private async cleanup(): Promise<void> {
     try {
       if (this.browser) {

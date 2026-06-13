@@ -1,3 +1,4 @@
+/** Shared types for tool parameters, results, and browser context. */
 import { Page, Browser, BrowserContext } from "playwright";
 
 export interface ToolParams {
@@ -16,6 +17,11 @@ export interface ToolContext {
   context?: BrowserContext;
 }
 
+/**
+ * Base class for all browser automation tools.
+ * Each tool encapsulates a single browser action (click, navigate, type, etc.)
+ * and receives shared browser state via setContext().
+ */
 export abstract class BaseTool {
   abstract readonly name: string;
   abstract readonly description: string;
@@ -44,6 +50,11 @@ export abstract class BaseTool {
   }
 }
 
+/**
+ * Central registry mapping tool names to their instances.
+ * Tools self-register at import time via toolRegistry.register().
+ * The Agent uses this to look up and invoke tools dynamically.
+ */
 export class ToolRegistry {
   private tools: Map<string, BaseTool> = new Map();
 

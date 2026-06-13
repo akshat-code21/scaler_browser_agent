@@ -1,4 +1,5 @@
-export { BaseTool, ToolParams, ToolResult, ToolContext, toolRegistry, ToolRegistry } from "./tools/Tool.js";
+export type { ToolParams, ToolResult, ToolContext } from "./tools/Tool.js";
+export { BaseTool, toolRegistry, ToolRegistry } from "./tools/Tool.js";
 export { OpenBrowserTool } from "./tools/OpenBrowserTool.js";
 export { NavigateTool } from "./tools/NavigateTool.js";
 export { ClickTool } from "./tools/ClickTool.js";

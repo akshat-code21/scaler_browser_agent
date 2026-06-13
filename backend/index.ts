@@ -1,3 +1,4 @@
+import "./src/agent/index.js";
 import { Agent } from "./src/agent/Agent.js";
 import { logger } from "./src/utils/logger.js";
 

@@ -1,3 +1,4 @@
+/** Launches a Playwright browser instance with configurable channel (chromium/firefox/webkit) and viewport. */
 import { Browser, BrowserContext, chromium, firefox, webkit } from "playwright";
 import { BaseTool, ToolParams, ToolResult, toolRegistry } from "./Tool.js";
 import { getConfig } from "../../utils/config.js";
