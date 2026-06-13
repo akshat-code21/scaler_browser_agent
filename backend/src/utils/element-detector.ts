@@ -103,7 +103,7 @@ export class ElementDetector {
 
     const descriptionField = await this.findDescription(page);
 
-    return { titleField, descriptionField };
+    return { titleField: titleField ?? undefined, descriptionField };
   }
 
   private async findDescription(page: Page): Promise<Locator | undefined> {
