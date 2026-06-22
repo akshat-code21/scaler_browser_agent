@@ -89,49 +89,5 @@ export class ElementDetector {
     logger.warn(`Element not found with any strategy`, { criteria });
     return null;
   }
-
-  /**
-   * Attempts to find the title (Bug Title) and description fields in the shadcn demo form.
-   * Falls back to direct ID-based selectors (#form-rhf-demo-title, #form-rhf-demo-description).
-   */
-  async findFormFields(page: Page): Promise<{ titleField?: Locator; descriptionField?: Locator }> {
-    const titleField = await this.findElement(page, {
-      label: "Bug Title",
-      placeholder: "Login button not working on mobile",
-      testId: "form-rhf-demo-title",
-      nearbyText: "Bug Title",
-      type: "text",
-    });
-
-    if (!titleField) {
-      const titleById = page.locator("#form-rhf-demo-title").first();
-      const visible = await titleById.isVisible().catch(() => false);
-      if (visible) {
-        return { titleField: titleById, descriptionField: await this.findDescription(page) };
-      }
-    }
-
-    const descriptionField = await this.findDescription(page);
-
-    return { titleField: titleField ?? undefined, descriptionField };
-  }
-
-  /** Finds the description textarea using strategies and ID fallback. */
-  private async findDescription(page: Page): Promise<Locator | undefined> {
-    const field = await this.findElement(page, {
-      label: "Description",
-      placeholder: "I'm having an issue with the login button on mobile.",
-      testId: "form-rhf-demo-description",
-      nearbyText: "Description",
-      role: "textbox",
-    });
-
-    if (field) return field;
-
-    const descById = page.locator("#form-rhf-demo-description").first();
-    const visible = await descById.isVisible().catch(() => false);
-    if (visible) return descById;
-
-    return undefined;
-  }
 }
+

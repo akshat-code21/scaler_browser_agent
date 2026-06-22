@@ -58,6 +58,7 @@ export class LLMClient {
     messages: ChatCompletionMessageParam[],
     screenshotBase64?: string,
     page?: any,
+    disableTools = false,
   ): Promise<LLMResponse> {
     const userContent: any[] = [];
 
@@ -81,7 +82,7 @@ export class LLMClient {
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: allMessages,
-        tools: toolDefinitions,
+        ...(disableTools ? {} : { tools: toolDefinitions }),
         temperature: this.temperature,
       });
 
@@ -119,7 +120,7 @@ export class LLMClient {
       logger.error("LLM API call failed", { error: error.message, status: error.status });
       if ((error.status === 400 || error.status === 404) && screenshotBase64) {
         logger.warn("Model may not support vision, retrying without screenshot");
-        return this.chat(messages, undefined, page);
+        return this.chat(messages, undefined, page, disableTools);
       }
       return { content: null, toolCalls: [], finishReason: "error", usage: null };
     }

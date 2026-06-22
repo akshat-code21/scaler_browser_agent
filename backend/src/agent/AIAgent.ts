@@ -24,7 +24,7 @@ export class AIAgent {
   private llmClient!: LLMClient;
   private totalTokens = { prompt: 0, completion: 0, total: 0 };
 
-  async run(): Promise<AgentResult> {
+  async run(prompt?: string): Promise<AgentResult> {
     this.startTime = Date.now();
     const config = getConfig();
 
@@ -36,16 +36,35 @@ export class AIAgent {
     };
     this.llmClient = new LLMClient(llmConfig);
 
-    logger.info("AIAgent started", { targetUrl: config.targetUrl, model: config.llmModel });
+    const isDefaultTask = !prompt;
 
     try {
       await this.openBrowser();
       const page = await this.createPage();
       this.page = page;
 
-      await this.navigate(config.targetUrl);
+      let result: AgentResult;
 
-      const result = await this.reasoningLoop(config);
+      if (isDefaultTask) {
+        logger.info("AIAgent running default task in backward compatibility mode", { targetUrl: config.targetUrl, model: config.llmModel });
+        await this.navigate(config.targetUrl);
+        result = await this.reasoningLoopDefault(config);
+      } else {
+        logger.info("AIAgent running custom task", { rawTask: prompt, model: config.llmModel });
+        const refinedTask = await this.refinePrompt(prompt);
+
+        let startUrl = config.targetUrl;
+        const urlRegex = /(https?:\/\/[^\s"']+)/;
+        const match = prompt.match(urlRegex);
+        if (match && match[1]) {
+          startUrl = match[1].replace(/[.,;:!?'")]+$/, "");
+        }
+
+        logger.info(`Pre-navigating browser to target: ${startUrl}`);
+        await this.navigate(startUrl);
+
+        result = await this.reasoningLoopGeneric(config, refinedTask);
+      }
 
       const finalScreenshot = await this.takeScreenshot("final");
       if (finalScreenshot) this.screenshotPaths.push(finalScreenshot);
@@ -74,7 +93,46 @@ export class AIAgent {
     }
   }
 
-  private async reasoningLoop(config: ReturnType<typeof getConfig>): Promise<AgentResult> {
+  private async refinePrompt(rawPrompt: string): Promise<string> {
+    logger.info("Refining user prompt...");
+    const systemInstruction = `You are an expert prompt engineering assistant. Your job is to take a raw user-provided task for a web automation browser agent and expand it into a clear, detailed, and structured instruction plan for the browser agent to execute.
+
+If the user request is simple, break it down logically. If it is already detailed, summarize it into key steps.
+Format your output exactly with these headers:
+HIGH-LEVEL GOAL:
+<description of what the user wants to achieve>
+
+KEY CONSTRAINTS & DETAILS:
+- <any critical constraint, selectors, or input values mentioned>
+
+STEP-BY-STEP LOGICAL APPROACH:
+1. <logical action step 1>
+2. <logical action step 2>`;
+
+    try {
+      const messages: ChatCompletionMessageParam[] = [
+        {
+          role: "system",
+          content: systemInstruction,
+        },
+        {
+          role: "user",
+          content: `Refine this raw task: "${rawPrompt}"`,
+        },
+      ];
+
+      const response = await this.llmClient.chat(messages, undefined, undefined, true);
+      if (response.content) {
+        logger.info("Prompt refinement successful", { refined: response.content });
+        return response.content;
+      }
+    } catch (error) {
+      logger.warn("Failed to refine prompt, falling back to raw prompt", { error: String(error) });
+    }
+    return rawPrompt;
+  }
+
+  private async reasoningLoopDefault(config: ReturnType<typeof getConfig>): Promise<AgentResult> {
     const messages: ChatCompletionMessageParam[] = [
       {
         role: "system",
@@ -107,6 +165,34 @@ RULES:
     const initialScreenshot = await this.takeScreenshot("step-0-initial");
     if (initialScreenshot) this.screenshotPaths.push(initialScreenshot);
 
+    return this.runLoop(messages);
+  }
+
+  private async reasoningLoopGeneric(config: ReturnType<typeof getConfig>, task: string): Promise<AgentResult> {
+    const messages: ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: `You are a web automation agent that controls a browser using tools. Complete the task step by step.
+
+USER TASK:
+${task}
+
+GENERAL RULES & GUIDELINES:
+- To type text into ANY input field or textarea, ONLY use the "send_keys" tool. Never use "click_on_screen" followed by keyboard events for typing.
+- When clicking on an element, you can target it by CSS selector, exact or partial text content, role, or x/y coordinates.
+- After invoking a tool, take a screenshot or observe the page state in the next step to verify the result of the action.
+- If you encounter a popup, modal, or unexpected page state, adapt your actions to close it or navigate around it.
+- Once the task is fully completed, respond with a summary of the accomplishments and stop (do not invoke any more tools).`,
+      },
+    ];
+
+    const initialScreenshot = await this.takeScreenshot("step-0-initial");
+    if (initialScreenshot) this.screenshotPaths.push(initialScreenshot);
+
+    return this.runLoop(messages);
+  }
+
+  private async runLoop(messages: ChatCompletionMessageParam[]): Promise<AgentResult> {
     for (let step = 1; step <= this.llmClient.getMaxSteps(); step++) {
       logger.info("AI reasoning step", { step });
 

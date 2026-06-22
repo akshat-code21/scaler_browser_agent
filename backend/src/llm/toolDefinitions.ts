@@ -21,7 +21,7 @@ export const toolDefinitions = [
       parameters: {
         type: "object",
         properties: {
-          selector: { type: "string", description: "CSS selector like #form-rhf-demo-title, input[type=text], button" },
+          selector: { type: "string", description: "CSS selector like #search-input, input[type=text], button" },
           text: { type: "string", description: "Visible text content of the element to click (NOT a CSS selector)" },
           x: { type: "number", description: "X coordinate on screen (requires screenshot)" },
           y: { type: "number", description: "Y coordinate on screen (requires screenshot)" },
@@ -38,7 +38,7 @@ export const toolDefinitions = [
         type: "object",
         properties: {
           text: { type: "string", description: "The text content to type into the field" },
-          selector: { type: "string", description: "CSS selector for the input field (e.g. #form-rhf-demo-title)" },
+          selector: { type: "string", description: "CSS selector for the input field (e.g. #first-name)" },
           placeholder: { type: "string", description: "The placeholder attribute text of the input field" },
           label: { type: "string", description: "The <label> text associated with the input field" },
         },

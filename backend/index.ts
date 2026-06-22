@@ -4,7 +4,8 @@ import { logger } from "./src/utils/logger.js";
 
 async function main() {
   const agent = new AIAgent();
-  const result = await agent.run();
+  const prompt = process.argv.slice(2).join(" ").trim() || undefined;
+  const result = await agent.run(prompt);
 
   if (result.success) {
     logger.info("Task completed successfully", {
