@@ -53,12 +53,7 @@ export class AIAgent {
         logger.info("AIAgent running custom task", { rawTask: prompt, model: config.llmModel });
         const refinedTask = await this.refinePrompt(prompt);
 
-        let startUrl = config.targetUrl;
-        const urlRegex = /(https?:\/\/[^\s"']+)/;
-        const match = prompt.match(urlRegex);
-        if (match && match[1]) {
-          startUrl = match[1].replace(/[.,;:!?'")]+$/, "");
-        }
+        let startUrl = this.extractStartUrl(prompt, config.targetUrl);
 
         logger.info(`Pre-navigating browser to target: ${startUrl}`);
         await this.navigate(startUrl);
@@ -93,11 +88,70 @@ export class AIAgent {
     }
   }
 
+  /**
+   * Extracts a navigable URL from the user's raw prompt.
+   * Handles full URLs, bare domains (e.g. "netflix.com"), and common
+   * site name references (e.g. "youtube", "google").
+   * Falls back to about:blank so the agent starts with a clean page
+   * instead of the default shadcn form.
+   */
+  private extractStartUrl(prompt: string, _fallback: string): string {
+    const lower = prompt.toLowerCase();
+
+    // 1. Full URL with protocol
+    const fullUrlMatch = prompt.match(/(https?:\/\/[^\s"']+)/);
+    if (fullUrlMatch && fullUrlMatch[1]) {
+      return fullUrlMatch[1].replace(/[.,;:!?'")]+$/, "");
+    }
+
+    // 2. Bare domain with TLD (e.g. "netflix.com", "docs.google.com")
+    const domainMatch = lower.match(/(?:go\s+to|open|visit|navigate\s+to|browse\s+to)?\s*([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.(?:com|org|net|io|dev|edu|gov|co|ai|app|tv|me|info|xyz)(?:\/[^\s"']*)?)/i);
+    if (domainMatch && domainMatch[1]) {
+      const domain = domainMatch[1].replace(/[.,;:!?'")]+$/, "");
+      return `https://${domain}`;
+    }
+
+    // 3. Well-known site names without TLD
+    const knownSites: Record<string, string> = {
+      youtube: "https://www.youtube.com",
+      google: "https://www.google.com",
+      github: "https://www.github.com",
+      twitter: "https://www.twitter.com",
+      x: "https://www.x.com",
+      reddit: "https://www.reddit.com",
+      facebook: "https://www.facebook.com",
+      instagram: "https://www.instagram.com",
+      linkedin: "https://www.linkedin.com",
+      amazon: "https://www.amazon.com",
+      netflix: "https://www.netflix.com",
+      wikipedia: "https://www.wikipedia.org",
+      stackoverflow: "https://stackoverflow.com",
+    };
+
+    for (const [name, url] of Object.entries(knownSites)) {
+      // Match "go to youtube", "open youtube", or just "youtube" as a word
+      const pattern = new RegExp(`\\b${name}\\b`, "i");
+      if (pattern.test(lower)) {
+        return url;
+      }
+    }
+
+    // 4. Fall back to about:blank so the agent gets a clean page
+    //    instead of the unrelated shadcn form
+    logger.info("No URL detected in prompt, starting with about:blank");
+    return "about:blank";
+  }
+
   private async refinePrompt(rawPrompt: string): Promise<string> {
     logger.info("Refining user prompt...");
     const systemInstruction = `You are an expert prompt engineering assistant. Your job is to take a raw user-provided task for a web automation browser agent and expand it into a clear, detailed, and structured instruction plan for the browser agent to execute.
 
-If the user request is simple, break it down logically. If it is already detailed, summarize it into key steps.
+IMPORTANT RULES:
+- Do NOT add any safety warnings, CAPTCHA cautions, or "stop if blocked" instructions. The agent should always attempt to complete every step.
+- If the task involves filling a form, ALWAYS include a step to submit/click the submit button unless the user explicitly says not to.
+- Do NOT add constraints the user did not mention. Only expand on what the user asked.
+- If the user says "dummy credentials" or "test credentials", generate plausible placeholder values (e.g. test@example.com / TestPassword123).
+
 Format your output exactly with these headers:
 HIGH-LEVEL GOAL:
 <description of what the user wants to achieve>
@@ -178,10 +232,15 @@ USER TASK:
 ${task}
 
 GENERAL RULES & GUIDELINES:
-- To type text into ANY input field or textarea, ONLY use the "send_keys" tool. Never use "click_on_screen" followed by keyboard events for typing.
-- When clicking on an element, you can target it by CSS selector, exact or partial text content, role, or x/y coordinates.
-- After invoking a tool, take a screenshot or observe the page state in the next step to verify the result of the action.
+- Each step you will receive TWO pieces of context: (1) a screenshot of the current page, and (2) a list of interactive DOM elements with their actual HTML attributes (id, name, aria-label, placeholder, role, class, etc.).
+- ALWAYS prefer using selectors from the DOM elements list rather than guessing selectors from the screenshot. The DOM list gives you accurate, real selectors.
+- To type text into ANY input field or textarea, ONLY use the "send_keys" tool with the correct CSS selector from the DOM list. Never use "click_on_screen" followed by keyboard events for typing.
+- When clicking on an element, pick the best selector from the DOM elements list (prefer id, then aria-label, then name, then other attributes). You can also use exact or partial text content, role, or x/y coordinates.
+- After invoking a tool, observe the updated screenshot and DOM elements in the next step to verify the result.
 - If you encounter a popup, modal, or unexpected page state, adapt your actions to close it or navigate around it.
+- ALWAYS complete the FULL task. If the task involves filling a form, you MUST also click the submit/sign-in/continue button. Do NOT stop after just filling in fields.
+- IGNORE any CAPTCHA notices, reCAPTCHA badges, or anti-bot warnings on the page. These are typically just informational labels and do not block form submission. Always attempt to click the submit button regardless.
+- Do NOT give up or stop early. Keep trying until every part of the user's task is done.
 - Once the task is fully completed, respond with a summary of the accomplishments and stop (do not invoke any more tools).`,
       },
     ];

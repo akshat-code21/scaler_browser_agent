@@ -27,10 +27,69 @@ export interface LLMResponse {
   } | null;
 }
 
-function extractPageText(page: any): string {
+async function extractPageContext(page: any): Promise<string> {
   const url = page.url();
-  const title = page.title();
-  return `URL: ${url}\nPage Title: ${title}`;
+  const title = await page.title();
+
+  let interactiveHtml = "";
+  try {
+    interactiveHtml = await page.evaluate(() => {
+      const selectors = [
+        'input', 'textarea', 'button', 'select', 'a[href]',
+        '[role="button"]', '[role="link"]', '[role="searchbox"]',
+        '[role="textbox"]', '[role="combobox"]', '[role="menuitem"]',
+        '[contenteditable="true"]', 'video', 'audio',
+      ];
+      const elements = document.querySelectorAll(selectors.join(', '));
+      const MAX_ELEMENTS = 80;
+      const results: string[] = [];
+
+      for (let i = 0; i < Math.min(elements.length, MAX_ELEMENTS); i++) {
+        const el = elements[i] as HTMLElement;
+        // Skip hidden elements
+        if (el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+
+        const tag = el.tagName.toLowerCase();
+        const attrs: string[] = [];
+        if (el.id) attrs.push(`id="${el.id}"`);
+        if (el.getAttribute('name')) attrs.push(`name="${el.getAttribute('name')}"`);
+        if (el.getAttribute('type')) attrs.push(`type="${el.getAttribute('type')}"`);
+        if (el.getAttribute('placeholder')) attrs.push(`placeholder="${el.getAttribute('placeholder')}"`);
+        if (el.getAttribute('aria-label')) attrs.push(`aria-label="${el.getAttribute('aria-label')}"`);
+        if (el.getAttribute('role')) attrs.push(`role="${el.getAttribute('role')}"`);
+        if (el.getAttribute('href')) {
+          const href = el.getAttribute('href')!;
+          attrs.push(`href="${href.length > 80 ? href.slice(0, 80) + '…' : href}"`);
+        }
+        if (el.className && typeof el.className === 'string') {
+          const cls = el.className.trim();
+          if (cls.length > 0 && cls.length <= 100) attrs.push(`class="${cls}"`);
+        }
+        if ((el as HTMLInputElement).value) {
+          const val = (el as HTMLInputElement).value;
+          attrs.push(`value="${val.length > 40 ? val.slice(0, 40) + '…' : val}"`);
+        }
+
+        const text = (el.textContent || '').trim().slice(0, 60);
+        const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+        results.push(`[${results.length}] <${tag}${attrStr}>${text ? text : ''}</${tag}>`);
+      }
+
+      return results.join('\n');
+    });
+  } catch (err) {
+    interactiveHtml = "(Could not extract DOM elements)";
+  }
+
+  return [
+    `Current URL: ${url}`,
+    `Page Title: ${title}`,
+    ``,
+    `Interactive DOM Elements on page:`,
+    interactiveHtml || "(No interactive elements found)",
+  ].join('\n');
 }
 
 export class LLMClient {
@@ -70,7 +129,8 @@ export class LLMClient {
     }
 
     if (page) {
-      userContent.push({ type: "text", text: extractPageText(page) });
+      const pageContext = await extractPageContext(page);
+      userContent.push({ type: "text", text: pageContext });
     }
 
     const allMessages: ChatCompletionMessageParam[] = [...messages];
